@@ -14,7 +14,12 @@ from __future__ import annotations
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+# Ensure src/ is on the path regardless of where uvicorn is launched from.
+# __file__ = .../atfm-agent/src/api/server.py  →  src/ = two levels up from here.
+_SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
 
 import asyncio
 import json
@@ -202,10 +207,15 @@ async def simulate_regulation(req: SimulateRequest):
             alternate_route_extra_fuel_kg=cfg.get("alternate_fuel_kg", 0.0),
         )
 
+    # Resolve audit_log_dir relative to the project root (atfm-agent/), not cwd
+    _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    _audit_dir = os.path.join(_project_root, "data", "audit_logs")
+    os.makedirs(_audit_dir, exist_ok=True)
+
     # Run the agent
     agent = ATFMAgent(
         cfmu_client=CFMUApiClient(accept_rate=0.65),
-        audit_log_dir="data/audit_logs",
+        audit_log_dir=_audit_dir,
     )
     agent_state = agent.run_regulation(regulation_id, slot_xmls, flight_data_map)
     _agent_states[regulation_id] = agent_state
@@ -263,7 +273,8 @@ async def get_flight_states(regulation_id: str):
 
 @app.get("/regulations/{regulation_id}/audit")
 async def get_audit_trail(regulation_id: str, flight: Optional[str] = None):
-    log_file = f"data/audit_logs/{regulation_id}.jsonl"
+    _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    log_file = os.path.join(_project_root, "data", "audit_logs", f"{regulation_id}.jsonl")
     if not os.path.exists(log_file):
         raise HTTPException(status_code=404, detail="Audit log not found")
 
@@ -278,7 +289,8 @@ async def get_audit_trail(regulation_id: str, flight: Optional[str] = None):
 
 @app.get("/regulations/{regulation_id}/report")
 async def get_report(regulation_id: str):
-    report_path = f"data/audit_logs/{regulation_id}_report.txt"
+    _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    report_path = os.path.join(_project_root, "data", "audit_logs", f"{regulation_id}_report.txt")
     if not os.path.exists(report_path):
         raise HTTPException(status_code=404, detail="Report not found — run simulation first")
     with open(report_path, "r") as f:
@@ -300,8 +312,9 @@ async def human_override(flight_number: str, req: OverrideRequest, regulation_id
         raise HTTPException(status_code=404, detail="Flight not found in this regulation")
 
     # Find the regulation's audit logger and log the override
-    log_file = f"data/audit_logs/{regulation_id}.jsonl"
-    logger = AuditLogger(log_dir="data/audit_logs")
+    _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    _audit_dir = os.path.join(_project_root, "data", "audit_logs")
+    logger = AuditLogger(log_dir=_audit_dir)
 
     agent_rec = state.impact_scores[flight_number].recommendation if flight_number in state.impact_scores else "UNKNOWN"
 

@@ -56,9 +56,19 @@ pytest tests/ -v
 
 ### 4. Start the OCC Dashboard API
 ```bash
-uvicorn src.api.server:app --reload --port 8000
+# Always use the launch script — it sets up all paths correctly:
+python start_server.py
+
+# Options:
+python start_server.py --port 8080 --reload
+
+# Then open:  http://127.0.0.1:8000
+# API docs:   http://127.0.0.1:8000/docs
 ```
-Then open http://localhost:8000 for the live OCC dashboard.
+
+> ⚠️ Do NOT run `uvicorn src.api.server:app` directly — it will fail with
+> `ModuleNotFoundError` because uvicorn won't resolve the internal imports.
+> Always use `python start_server.py`.
 
 ---
 
